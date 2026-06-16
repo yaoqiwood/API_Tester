@@ -1,0 +1,10 @@
+{
+  "name": "api-tester-local-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local Node server for api_tester.html",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  }
+}

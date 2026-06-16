@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>例行检查功能 API Tester</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; height: 100vh; overflow: hidden; font-size: 13px; }
+    .app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* Top bar */
+    .top-bar { display: flex; align-items: center; gap: 12px; padding: 0 20px; height: 48px; background: #11111b; border-bottom: 1px solid #313244; flex-shrink: 0; }
+    .app-title { font-size: 15px; font-weight: 600; color: #cdd6f4; white-space: nowrap; margin-right: 4px; }
+    .env-label { font-size: 12px; color: #6c7086; white-space: nowrap; }
+    .top-bar select { background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px; color: #cdd6f4; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+    .top-bar .base-url-input { width: 320px; background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px; color: #cdd6f4; padding: 5px 10px; font-size: 12px; }
+    .top-bar .base-url-input:focus { outline: none; border-color: #cba6f7; }
+    .top-bar-spacer { flex: 1; }
+    .toggle-wrap { display: flex; align-items: center; gap: 20px; }
+    .toggle-group { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #a6adc8; white-space: nowrap; }
+    .toggle-group.is-disabled { color: #6c7086; }
+    .ios-toggle { width: 34px; height: 20px; appearance: none; background: #313244; border-radius: 10px; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
+    .ios-toggle:checked { background: #cba6f7; }
+    .ios-toggle::after { content: ''; position: absolute; width: 16px; height: 16px; background: #cdd6f4; border-radius: 50%; top: 2px; left: 2px; transition: left 0.2s; }
+    .ios-toggle:checked::after { left: 16px; }
+    .ios-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Content */
+    .content { display: flex; flex: 1; overflow: hidden; }
+
+    /* Sidebar */
+    .sidebar { width: 200px; min-width: 160px; max-width: 520px; background: #181825; border-right: 1px solid #313244; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+    #sidebarResizer { width: 4px; background: #313244; cursor: ew-resize; flex-shrink: 0; }
+    #sidebarResizer:hover { background: #cba6f7; }
+    .sidebar-search { padding: 10px; border-bottom: 1px solid #313244; }
+    .sidebar-search input { width: 100%; background: #313244; border: 1px solid transparent; border-radius: 6px; color: #cdd6f4; padding: 6px 10px; font-size: 12px; }
+    .sidebar-search input::placeholder { color: #6c7086; }
+    .sidebar-search input:focus { outline: none; border-color: #45475a; }
+    .api-list-container { flex: 1; overflow-y: auto; }
+    .api-list-container::-webkit-scrollbar { width: 4px; }
+    .api-list-container::-webkit-scrollbar-thumb { background: #45475a; border-radius: 2px; }
+    .api-group-title { display: flex; align-items: center; gap: 6px; padding: 7px 12px; cursor: pointer; color: #a6adc8; font-size: 12px; user-select: none; }
+    .api-group-title:hover { background: #1e1e2e; }
+    .group-arrow { font-size: 10px; transition: transform 0.15s; color: #6c7086; display: inline-block; }
+    .group-arrow.collapsed { transform: rotate(-90deg); }
+    .group-name { flex: 1; }
+    .group-count { background: #313244; border-radius: 10px; padding: 1px 6px; font-size: 10px; color: #6c7086; }
+    .api-group-items.hidden { display: none; }
+    .api-item { display: flex; align-items: center; gap: 7px; padding: 6px 12px 6px 16px; cursor: pointer; border-left: 2px solid transparent; }
+    .api-item:hover { background: #1e1e2e; }
+    .api-item.active { background: #1e1e2e; border-left-color: #cba6f7; }
+    .api-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+    .method-badge { font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 4px; min-width: 44px; text-align: center; flex-shrink: 0; }
+    .method-GET { background: #1e3a2f; color: #a6e3a1; }
+    .method-POST { background: #2d2b3d; color: #cba6f7; }
+    .method-PUT { background: #3d2e1e; color: #fab387; }
+    .method-DELETE { background: #3d1e1e; color: #f38ba8; }
+    .method-PATCH { background: #2d3a1e; color: #a6e3a1; }
+
+    /* Main panel */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .request-header { display: flex; align-items: center; padding: 14px 20px 10px; flex-shrink: 0; }
+    .request-title { font-size: 16px; font-weight: 600; color: #cdd6f4; flex: 1; }
+    .btn { background: transparent; border: 1px solid #45475a; border-radius: 6px; color: #cdd6f4; padding: 5px 12px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .btn:hover { background: #313244; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .url-bar { display: flex; align-items: center; gap: 8px; padding: 0 20px 12px; flex-shrink: 0; }
+    .method-select { background: #313244; border: 1px solid #45475a; border-radius: 6px; color: #cdd6f4; padding: 7px 12px; font-size: 13px; font-weight: 600; cursor: pointer; min-width: 80px; }
+    .url-input-main { flex: 1; background: #313244; border: 1px solid #45475a; border-radius: 6px; color: #cdd6f4; padding: 7px 12px; font-size: 13px; }
+    .url-input-main:focus { outline: none; border-color: #cba6f7; }
+    .btn-send { background: #cba6f7; border: none; border-radius: 6px; color: #1e1e2e; font-weight: 700; padding: 7px 24px; font-size: 13px; cursor: pointer; }
+    .btn-send:hover { background: #b4befe; }
+    .btn-send:disabled { background: #45475a; color: #6c7086; cursor: not-allowed; }
+
+    /* Tabs */
+    .tabs { display: flex; align-items: center; border-bottom: 1px solid #313244; padding: 0 20px; flex-shrink: 0; }
+    .tab { background: transparent; border: none; border-bottom: 2px solid transparent; color: #6c7086; padding: 8px 14px; font-size: 13px; cursor: pointer; margin-bottom: -1px; white-space: nowrap; }
+    .tab:hover { color: #cdd6f4; }
+    .tab.active { color: #cdd6f4; border-bottom-color: #cba6f7; }
+    .tab-badge { background: #313244; border-radius: 8px; padding: 1px 6px; font-size: 10px; margin-left: 4px; color: #a6adc8; }
+    .tabs-right { margin-left: auto; display: flex; gap: 6px; align-items: center; padding-left: 12px; }
+
+    /* Tab content */
+    .tab-content { flex: 1; overflow-y: auto; padding: 14px 20px; min-height: 0; }
+    .tab-content::-webkit-scrollbar { width: 4px; }
+    .tab-content::-webkit-scrollbar-thumb { background: #45475a; border-radius: 2px; }
+
+    /* Params table */
+    .params-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .params-table th { text-align: left; padding: 6px 8px; color: #6c7086; font-weight: 500; border-bottom: 1px solid #313244; font-size: 12px; }
+    .params-table td { padding: 3px 4px; border-bottom: 1px solid #1e1e2e; }
+    .params-table input[type=text] { width: 100%; background: transparent; border: 1px solid transparent; border-radius: 4px; color: #cdd6f4; padding: 5px 6px; font-size: 12px; }
+    .params-table input[type=text]:focus { outline: none; border-color: #45475a; background: #313244; }
+    .params-table input[type=text]::placeholder { color: #6c7086; }
+    .params-table input[type=checkbox] { accent-color: #cba6f7; cursor: pointer; }
+    .param-required { color: #f38ba8; font-size: 11px; text-align: center; }
+    .param-optional { color: #6c7086; font-size: 11px; text-align: center; }
+    .add-row-btn { margin-top: 8px; font-size: 12px; color: #6c7086; background: transparent; border: 1px dashed #45475a; border-radius: 6px; padding: 5px 14px; cursor: pointer; }
+    .add-row-btn:hover { color: #cdd6f4; border-color: #6c7086; }
+    .body-type-bar { display: flex; gap: 4px; margin-bottom: 10px; }
+    .body-type-btn { background: transparent; border: 1px solid #45475a; border-radius: 4px; color: #6c7086; padding: 3px 10px; font-size: 11px; cursor: pointer; }
+    .body-type-btn.active { color: #cdd6f4; border-color: #cba6f7; }
+    #bodyTextarea { width: 100%; height: calc(100% - 38px); min-height: 80px; background: #313244; border: 1px solid #45475a; border-radius: 6px; color: #cdd6f4; padding: 10px; font-family: 'Consolas','Monaco',monospace; font-size: 12px; resize: none; }
+    #bodyTextarea:focus { outline: none; border-color: #cba6f7; }
+    .auth-form { display: flex; flex-direction: column; gap: 12px; max-width: 480px; }
+    .auth-form label { font-size: 11px; color: #6c7086; margin-bottom: 4px; display: block; }
+    .auth-form input { width: 100%; background: #313244; border: 1px solid #45475a; border-radius: 6px; color: #cdd6f4; padding: 7px 10px; font-size: 12px; }
+    .auth-form input:focus { outline: none; border-color: #cba6f7; }
+    .schema-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .schema-table th { text-align: left; padding: 6px 10px; color: #6c7086; font-weight: 500; border-bottom: 1px solid #313244; background: #181825; }
+    .schema-table td { padding: 6px 10px; border-bottom: 1px solid #1e1e2e; vertical-align: top; }
+    .schema-key { font-family: monospace; color: #89b4fa; }
+    .schema-type { color: #fab387; font-family: monospace; font-size: 11px; }
+    .schema-required { color: #f38ba8; font-size: 11px; }
+    .schema-optional { color: #6c7086; font-size: 11px; }
+    .schema-example { font-family: monospace; color: #a6e3a1; font-size: 11px; }
+    .schema-children { margin-top: 6px; padding: 8px; background: #181825; border-radius: 4px; }
+    .schema-block-title { font-size: 11px; color: #6c7086; margin-bottom: 4px; font-weight: 600; }
+    .schema-empty { color: #6c7086; font-size: 12px; padding: 8px; }
+
+    /* Resizer + Response */
+    #resizer { height: 4px; background: #313244; cursor: ns-resize; flex-shrink: 0; }
+    #resizer:hover { background: #cba6f7; }
+    #responsePanel { height: 260px; display: flex; flex-direction: column; }
+    .response-header { display: flex; align-items: center; gap: 10px; padding: 8px 20px; border-bottom: 1px solid #313244; flex-shrink: 0; background: #181825; }
+    .response-label { font-size: 13px; color: #a6adc8; font-weight: 500; }
+    .status-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+    .status-0 { background: #313244; color: #6c7086; }
+    .status-2xx { background: #1e3a2f; color: #a6e3a1; }
+    .status-4xx { background: #3d2e1e; color: #fab387; }
+    .status-5xx { background: #3d1e1e; color: #f38ba8; }
+    .response-meta { font-size: 11px; color: #6c7086; }
+    #responseBody { flex: 1; overflow-y: auto; padding: 12px 20px; background: #1e1e2e; }
+    #responseBody::-webkit-scrollbar { width: 4px; }
+    #responseBody::-webkit-scrollbar-thumb { background: #45475a; border-radius: 2px; }
+    #responseBody pre { font-family: 'Consolas','Monaco',monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; line-height: 1.6; }
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #45475a; gap: 10px; }
+    .empty-state p { font-size: 13px; }
+    .json-key { color: #89b4fa; } .json-string { color: #a6e3a1; } .json-bool { color: #fab387; } .json-null { color: #f38ba8; } .json-number { color: #f9e2af; }
+    #mockBadge { display: none; font-size: 10px; background: #fab387; color: #1e1e2e; padding: 1px 6px; border-radius: 3px; font-weight: 700; }
+    #mockIndicator { display: none; } #mockIndicator.visible { display: inline; font-size: 10px; background: #fab387; color: #1e1e2e; padding: 1px 6px; border-radius: 3px; font-weight: 700; }
+    .modal-mask { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 20px; background: rgba(17, 17, 27, 0.7); backdrop-filter: blur(4px); z-index: 1000; }
+    .modal-mask.visible { display: flex; }
+    .modal-card { width: min(480px, 100%); background: #181825; border: 1px solid #313244; border-radius: 12px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35); overflow: hidden; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 12px; border-bottom: 1px solid #313244; }
+    .modal-title { font-size: 15px; font-weight: 600; color: #cdd6f4; }
+    .modal-close { background: transparent; border: none; color: #6c7086; font-size: 18px; line-height: 1; cursor: pointer; }
+    .modal-close:hover { color: #cdd6f4; }
+    .modal-body { padding: 16px 18px; }
+    .modal-desc { margin-bottom: 10px; color: #a6adc8; line-height: 1.5; }
+    .modal-label { display: block; margin-bottom: 6px; font-size: 12px; color: #6c7086; }
+    .modal-input { width: 100%; background: #313244; border: 1px solid #45475a; border-radius: 8px; color: #cdd6f4; padding: 10px 12px; font-size: 13px; }
+    .modal-input:focus { outline: none; border-color: #cba6f7; }
+    .modal-error { min-height: 18px; margin-top: 8px; color: #f38ba8; font-size: 12px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 0 18px 18px; }
+    select option { background: #313244; } input[type=text]::placeholder { color: #6c7086; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <!-- Top bar -->
+  <div class="top-bar">
+    <span class="app-title">例行检查功能 API</span>
+    <span class="env-label">环境</span>
+    <select id="envSelect" onchange="onEnvChange()">
+      <option value="dev">开发环境 (dev)</option>
+      <option value="prod">生产环境 (prod)</option>
+      <option value="custom">自定义</option>
+    </select>
+    <input type="text" class="base-url-input" id="baseUrlInput" placeholder="Base URL" oninput="updateBaseUrl(this.value)">
+    <button class="btn" type="button" id="saveBaseUrlBtn" onclick="saveBaseUrl()">保存</button>
+    <div class="top-bar-spacer"></div>
+    <div class="toggle-wrap">
+      <label class="toggle-group">
+        <input type="checkbox" class="ios-toggle" id="mockToggle" onchange="onMockToggle()">
+        使用 Mock <span id="mockBadge">MOCK</span>
+      </label>
+      <button class="btn" type="button" id="loginTokenBtn" onclick="promptLoginToken()">使用登录 token</button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-search">
+        <input type="text" placeholder="搜索接口..." oninput="filterApis(this.value)">
+      </div>
+      <div class="api-list-container">
+        <div id="apiList"></div>
+      </div>
+    </div>
+    <div id="sidebarResizer"></div>
+
+    <!-- Main -->
+    <div class="main">
+      <div class="request-header">
+        <span id="requestTitle" class="request-title">请选择接口</span>
+        <span id="mockIndicator"></span>
+        <button class="btn" onclick="copyApiInfo()">一键复制接口信息</button>
+      </div>
+      <div class="url-bar">
+        <select class="method-select" id="methodSelect">
+          <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option>
+        </select>
+        <input type="text" class="url-input-main" id="urlInput" placeholder="URL">
+        <button class="btn-send" id="sendBtn" onclick="sendRequest()">发送</button>
+      </div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('params',this)">Params <span class="tab-badge" id="paramsBadge">0</span></button>
+        <button class="tab" onclick="switchTab('headers',this)">Headers</button>
+        <button class="tab" onclick="switchTab('body',this)">Body</button>
+        <button class="tab" onclick="switchTab('auth',this)">Auth</button>
+        <button class="tab" id="requestSchemaTab" style="display:none" onclick="switchTab('requestSchema',this)">请求 Schema</button>
+        <button class="tab" id="responseSchemaTab" style="display:none" onclick="switchTab('responseSchema',this)">响应 Schema</button>
+        <div class="tabs-right">
+          <button class="btn" id="saveParamsBtn" onclick="saveCurrentApiParams()" disabled>保存当前接口 Params</button>
+          <button class="btn" onclick="copyCurrentTab()">复制</button>
+        </div>
+      </div>
+      <div class="tab-content">
+        <div id="tab-params">
+          <table class="params-table">
+            <thead><tr><th style="width:28px"></th><th>KEY</th><th>VALUE</th><th>描述</th><th style="width:52px">必填</th></tr></thead>
+            <tbody id="paramsBody"></tbody>
+          </table>
+          <button class="add-row-btn" onclick="addParamRow('paramsBody')">+ 添加参数</button>
+        </div>
+        <div id="tab-headers" style="display:none">
+          <table class="params-table">
+            <thead><tr><th style="width:28px"></th><th>KEY</th><th>VALUE</th><th>描述</th></tr></thead>
+            <tbody id="headersBody"></tbody>
+          </table>
+          <button class="add-row-btn" onclick="addParamRow('headersBody')">+ 添加 Header</button>
+        </div>
+        <div id="tab-body" style="display:none;height:100%">
+          <div class="body-type-bar">
+            <button class="body-type-btn active" onclick="setBodyType('json',this)">JSON</button>
+            <button class="body-type-btn" onclick="setBodyType('text',this)">Text</button>
+          </div>
+          <textarea id="bodyTextarea" placeholder="请求 Body (JSON)"></textarea>
+        </div>
+        <div id="tab-auth" style="display:none">
+          <div class="auth-form">
+            <div><label>Authorization Token</label><input type="text" id="authToken" placeholder="Bearer ..." oninput="updateAuthHeader()"></div>
+            <div><label>Tenant ID</label><input type="text" id="tenantId" placeholder="1" oninput="updateAuthHeader()"></div>
+          </div>
+        </div>
+        <div id="tab-requestSchema" style="display:none"><div id="bodySchemaContent"></div></div>
+        <div id="tab-responseSchema" style="display:none"><div id="responseSchemaContent"></div></div>
+      </div>
+
+      <div id="resizer"></div>
+
+      <div id="responsePanel">
+        <div class="response-header">
+          <span class="response-label">响应</span>
+          <span class="status-badge status-0" id="statusBadge">—</span>
+          <span class="response-meta" id="responseTime"></span>
+          <span class="response-meta" id="responseSize"></span>
+          <div style="flex:1"></div>
+          <button class="btn" onclick="copyResponse()">复制</button>
+          <button class="btn" onclick="clearResponse()">清空</button>
+        </div>
+        <div id="responseBody">
+          <div class="empty-state">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+            <p>发送请求后，响应将显示在这里</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-mask" id="loginTokenModal" onclick="handleLoginTokenModalMaskClick(event)">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="loginTokenModalTitle">
+    <div class="modal-header">
+      <span class="modal-title" id="loginTokenModalTitle">写入登录 Token</span>
+      <button class="modal-close" type="button" onclick="closeLoginTokenModal()" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">输入 token 后会写入 `Header.Authorization`，并保存到 `localStorage`。</p>
+      <label class="modal-label" for="loginTokenInput">Token</label>
+      <input class="modal-input" type="text" id="loginTokenInput" placeholder="请输入 token" autocomplete="off">
+      <div class="modal-error" id="loginTokenError"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" type="button" onclick="closeLoginTokenModal()">取消</button>
+      <button class="btn-send" type="button" onclick="confirmLoginToken()">确认</button>
+    </div>
+  </div>
+</div>
+<script src="api_tester_env.js"></script>
+<script src="api_tester_data.js"></script>
+<script src="api_tester_app.js"></script>
+</body>
+</html>
