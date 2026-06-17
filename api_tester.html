@@ -152,6 +152,8 @@
     .modal-label { display: block; margin-bottom: 6px; font-size: 12px; color: #6c7086; }
     .modal-input { width: 100%; background: #313244; border: 1px solid #45475a; border-radius: 8px; color: #cdd6f4; padding: 10px 12px; font-size: 13px; }
     .modal-input:focus { outline: none; border-color: #cba6f7; }
+    .modal-select { width: 100%; background: #313244; border: 1px solid #45475a; border-radius: 8px; color: #cdd6f4; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
+    .modal-select:focus { outline: none; border-color: #cba6f7; }
     .modal-error { min-height: 18px; margin-top: 8px; color: #f38ba8; font-size: 12px; }
     .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 0 18px 18px; }
     select option { background: #313244; } input[type=text]::placeholder { color: #6c7086; }
@@ -280,9 +282,14 @@
       <button class="modal-close" type="button" onclick="closeLoginTokenModal()" aria-label="关闭">×</button>
     </div>
     <div class="modal-body">
-      <p class="modal-desc">输入 token 后会写入 `Header.Authorization`，并保存到 `localStorage`。</p>
-      <label class="modal-label" for="loginTokenInput">Token</label>
-      <input class="modal-input" type="text" id="loginTokenInput" placeholder="请输入 token" autocomplete="off">
+      <p class="modal-desc">选择要写入的 Header，输入后会保存到 `localStorage`。</p>
+      <label class="modal-label" for="loginTokenHeaderSelect">写入 Header</label>
+      <select class="modal-select" id="loginTokenHeaderSelect">
+        <option value="Authorization">Authorization</option>
+        <option value="Cookie">Cookie</option>
+      </select>
+      <label class="modal-label" for="loginTokenInput">Header 值</label>
+      <input class="modal-input" type="text" id="loginTokenInput" placeholder="请输入 Header 值" autocomplete="off">
       <div class="modal-error" id="loginTokenError"></div>
     </div>
     <div class="modal-footer">

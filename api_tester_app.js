@@ -605,14 +605,24 @@ function upsertHeaderRow(headerKey, headerValue, desc = '') {
 function promptLoginToken() {
     const modal = document.getElementById('loginTokenModal')
     const input = document.getElementById('loginTokenInput')
+    const headerSelect = document.getElementById('loginTokenHeaderSelect')
     const error = document.getElementById('loginTokenError')
-    if (!modal || !input || !error) return
+    if (!modal || !input || !headerSelect || !error) return
 
-    const currentValue = findHeaderRow('Authorization')?.querySelector('.param-value')?.value || ''
-    const storedToken = getStoredLoginToken()
-    const defaultToken = currentValue.replace(/^Bearer\s+/i, '').trim() || storedToken
+    const storedLoginToken = getStoredLoginToken()
+    const currentAuthorizationValue = findHeaderRow('Authorization')?.querySelector('.param-value')?.value || ''
+    const currentCookieValue = findHeaderRow('Cookie')?.querySelector('.param-value')?.value || ''
+    const selectedHeader =
+        storedLoginToken.headerKey ||
+        (currentCookieValue.trim() ? 'Cookie' : 'Authorization')
+    const currentValue =
+        selectedHeader === 'Cookie'
+            ? currentCookieValue
+            : currentAuthorizationValue.replace(/^Bearer\s+/i, '').trim()
+    const defaultValue = currentValue || storedLoginToken.value
 
-    input.value = defaultToken
+    headerSelect.value = selectedHeader
+    input.value = defaultValue
     error.textContent = ''
     modal.classList.add('visible')
     document.body.style.overflow = 'hidden'
@@ -642,31 +652,56 @@ function handleLoginTokenModalMaskClick(event) {
 
 function confirmLoginToken() {
     const input = document.getElementById('loginTokenInput')
+    const headerSelect = document.getElementById('loginTokenHeaderSelect')
     const error = document.getElementById('loginTokenError')
-    if (!input || !error) return
+    if (!input || !headerSelect || !error) return
 
-    const token = input.value.trim()
-    const normalizedToken = token.replace(/^Bearer\s+/i, '').trim()
-    if (!normalizedToken) {
-        error.textContent = 'token 不能为空'
+    const headerKey = headerSelect.value || 'Authorization'
+    const rawValue = input.value.trim()
+    if (!rawValue) {
+        error.textContent = 'Header 值不能为空'
         input.focus()
         return
     }
 
-    const authorizationValue = /^Bearer\s+/i.test(token) ? token : `Bearer ${normalizedToken}`
-    upsertHeaderRow('Authorization', authorizationValue, '认证令牌')
-    localStorage.setItem(API_TESTER_LOGIN_TOKEN_STORAGE_KEY, normalizedToken)
+    const headerValue = headerKey === 'Authorization' && !/^Bearer\s+/i.test(rawValue) ? `Bearer ${rawValue}` : rawValue
+    const headerDesc = headerKey === 'Authorization' ? '认证令牌' : '登录 Cookie'
+    upsertHeaderRow(headerKey, headerValue, headerDesc)
+    localStorage.setItem(
+        API_TESTER_LOGIN_TOKEN_STORAGE_KEY,
+        JSON.stringify({
+            headerKey,
+            value: rawValue,
+        })
+    )
 
     const authTokenInput = document.getElementById('authToken')
-    if (authTokenInput) {
-        authTokenInput.value = authorizationValue
+    if (authTokenInput && headerKey === 'Authorization') {
+        authTokenInput.value = headerValue
     }
 
     closeLoginTokenModal()
 }
 
 function getStoredLoginToken() {
-    return localStorage.getItem(API_TESTER_LOGIN_TOKEN_STORAGE_KEY) || ''
+    const raw = localStorage.getItem(API_TESTER_LOGIN_TOKEN_STORAGE_KEY)
+    if (!raw) {
+        return { headerKey: 'Authorization', value: '' }
+    }
+
+    try {
+        const parsed = JSON.parse(raw)
+        if (parsed && typeof parsed === 'object') {
+            return {
+                headerKey: parsed.headerKey || 'Authorization',
+                value: parsed.value || '',
+            }
+        }
+    } catch (e) {
+        return { headerKey: 'Authorization', value: raw }
+    }
+
+    return { headerKey: 'Authorization', value: '' }
 }
 
 function bindLoginTokenModalEvents() {
