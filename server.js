@@ -1,6 +1,8 @@
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
+const { URL } = require("url");
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT) || 8090;
@@ -57,6 +59,80 @@ function sendFile(res, filePath) {
   });
 }
 
+function proxyRequest(req, res) {
+  if (!req.url) {
+    sendJson(res, 400, { error: "Missing request URL" });
+    return;
+  }
+
+  const requestUrl = new URL(
+    req.url,
+    `http://${req.headers.host || `${HOST}:${PORT}`}`,
+  );
+  const target = requestUrl.searchParams.get("target");
+  if (!target) {
+    sendJson(res, 400, { error: "Missing target URL" });
+    return;
+  }
+
+  let targetUrl;
+  try {
+    targetUrl = new URL(target);
+  } catch (e) {
+    sendJson(res, 400, { error: "Invalid target URL" });
+    return;
+  }
+
+  const client = targetUrl.protocol === "https:" ? https : http;
+
+  const headers = {};
+  Object.entries(req.headers).forEach(([key, value]) => {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey === "host" || lowerKey === "content-length") return;
+    headers[key] = value;
+  });
+  headers.host = targetUrl.host;
+
+  // Convert X-Proxy-Cookie (sent by the frontend because Cookie is a forbidden
+  // request header in browsers) to the real Cookie header.
+  // Make sure to replace any browser-supplied Cookie for the proxy origin.
+  const proxyCookieKey = Object.keys(req.headers).find(
+    (k) => k.toLowerCase() === "x-proxy-cookie",
+  );
+  if (proxyCookieKey) {
+    Object.keys(headers).forEach((k) => {
+      if (k.toLowerCase() === "cookie") delete headers[k];
+    });
+    headers["Cookie"] = req.headers[proxyCookieKey];
+    delete headers[proxyCookieKey];
+    console.log(
+      `[proxy] ${req.method} ${targetUrl.href} -> Cookie: ${headers["Cookie"].substring(0, 80)}...`,
+    );
+  }
+
+  const proxyReq = client.request(
+    targetUrl,
+    { method: req.method, headers },
+    (proxyRes) => {
+      const statusCode = proxyRes.statusCode || 502;
+      const responseHeaders = { ...proxyRes.headers };
+      delete responseHeaders["content-length"];
+      res.writeHead(statusCode, responseHeaders);
+      proxyRes.pipe(res);
+    },
+  );
+
+  proxyReq.on("error", (err) => {
+    if (!res.headersSent) {
+      sendJson(res, 502, { error: "Proxy error", message: err.message });
+    } else {
+      res.end();
+    }
+  });
+
+  req.pipe(proxyReq);
+}
+
 const server = http.createServer((req, res) => {
   if (!req.url) {
     sendJson(res, 400, { error: "Missing request URL" });
@@ -71,6 +147,11 @@ const server = http.createServer((req, res) => {
 
   if (pathname === "/healthz") {
     sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  if (pathname === "/proxy") {
+    proxyRequest(req, res);
     return;
   }
 

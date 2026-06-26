@@ -602,6 +602,15 @@ function upsertHeaderRow(headerKey, headerValue, desc = '') {
     }
 }
 
+function onLoginTokenHeaderChange(headerKey) {
+    const input = document.getElementById('loginTokenInput')
+    if (!input) return
+    input.placeholder =
+        headerKey === 'Cookie'
+            ? '请粘贴完整的 Cookie 字符串'
+            : '请输入 Token（自动补 Bearer）'
+}
+
 function promptLoginToken() {
     const modal = document.getElementById('loginTokenModal')
     const input = document.getElementById('loginTokenInput')
@@ -622,6 +631,7 @@ function promptLoginToken() {
     const defaultValue = currentValue || storedLoginToken.value
 
     headerSelect.value = selectedHeader
+    onLoginTokenHeaderChange(selectedHeader)
     input.value = defaultValue
     error.textContent = ''
     modal.classList.add('visible')
@@ -706,7 +716,12 @@ function getStoredLoginToken() {
 
 function bindLoginTokenModalEvents() {
     const input = document.getElementById('loginTokenInput')
+    const headerSelect = document.getElementById('loginTokenHeaderSelect')
     if (!input) return
+
+    if (headerSelect) {
+        headerSelect.addEventListener('change', () => onLoginTokenHeaderChange(headerSelect.value))
+    }
 
     input.addEventListener('input', () => {
         const error = document.getElementById('loginTokenError')
@@ -905,7 +920,19 @@ async function sendRequest() {
                 }
             }
 
-            const resp = await fetch(url, opts)
+            // Browsers forbid setting the Cookie header directly via fetch.
+            // When a manual Cookie is present, route through the local proxy
+            // and pass the cookie via the custom X-Proxy-Cookie header.
+            let requestUrl = url
+            const cookieHeaderKey = Object.keys(headers).find(k => k.toLowerCase() === 'cookie')
+            if (cookieHeaderKey) {
+                headers['X-Proxy-Cookie'] = headers[cookieHeaderKey]
+                delete headers[cookieHeaderKey]
+                requestUrl = `${window.location.origin}/proxy?target=${encodeURIComponent(url)}`
+                opts.credentials = 'omit'
+            }
+
+            const resp = await fetch(requestUrl, opts)
             let data
             const ct = resp.headers.get('content-type') || ''
             if (ct.includes('application/json')) {
